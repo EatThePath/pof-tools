@@ -59,7 +59,7 @@ pub(crate) fn get_version() -> Version {
 }
 
 // like a regular vector, but indexed with ObjectIds only, for some safety
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct ObjVec<T>(pub Vec<T>);
 impl<T> Index<ObjectId> for ObjVec<T> {
     type Output = T;
@@ -593,7 +593,7 @@ impl Serialize for BspLightKind {
 pub const MAX_EYES: usize = 9;
 
 mk_struct! {
-    #[derive(Debug)]
+    #[derive(Debug,Clone)]
     // this is pretty much unused by the engine
     pub struct BspLight {
         pub location: Vec3d,
@@ -713,7 +713,7 @@ impl Serialize for ShieldPolygon {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum ShieldNode {
     Split {
         bbox: BoundingBox,
@@ -885,7 +885,7 @@ impl GlowPoint {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default,Clone)]
 pub struct ObjHeader {
     pub max_radius: f32,
     pub obj_flags: u32,
@@ -899,7 +899,7 @@ pub struct ObjHeader {
     pub bsp_lights: Vec<BspLight>,
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct ShieldData {
     pub verts: Vec<Vec3d>,
     pub polygons: Vec<ShieldPolygon>,
@@ -1788,7 +1788,7 @@ mk_versions! {
     V23_01(2301, "23.01"),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default,Clone)]
 pub struct Model {
     pub version: Version,
     pub header: ObjHeader,
@@ -1814,6 +1814,36 @@ pub struct Model {
     pub errors: BTreeSet<Error>,
 }
 impl Model {
+    pub fn drop_lods(&mut self){
+      //  println!(" has {} subobjects",self.sub_objects.len());
+        if self.header.detail_levels.len()>1{
+        let d0 = self.header.detail_levels.first().unwrap().clone();
+        let mut to_keep: Vec<ObjectId> = vec![];
+        for o in &self.sub_objects{
+            let thisid = o.obj_id.clone();
+            if self.is_obj_id_ancestor(thisid, d0) {
+                to_keep.push(thisid);
+
+            }
+        }
+        for o in self.sub_objects.iter_mut(){
+            let id = o.obj_id;
+            let debris = o.is_debris_model;
+            let destroyed = o.is_destroyed_model();
+            if !to_keep.contains(&id) || debris || destroyed {
+                o.bsp_data = BspData::default();
+            }
+        }/* 
+        self.sub_objects.retain(|SubObject{obj_id,..}|
+            to_keep.contains(obj_id)
+        );*/
+      //  println!(" then {} subobjects",self.sub_objects.len());
+        self.header.detail_levels= vec![d0];}
+    }
+    pub fn drop_shield(&mut self){
+        self.shield_data=None;
+
+    }
     // rechecks just one or all of the errors on the model
     pub fn recheck_errors(&mut self, error_to_check: Set<Error>) {
         if let Set::One(error) = error_to_check {

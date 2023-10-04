@@ -1111,7 +1111,7 @@ impl Model {
 }
 
 #[derive(Default)]
-struct GltfBuilder {
+pub struct GltfBuilder {
     root: json::Root,
     buffer: Vec<u8>,
 }
